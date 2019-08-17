@@ -1,0 +1,10 @@
+[package]
+name = "instagrambot"
+version = "0.1.0"
+authors = ["NotAefka <notaefka@protonmail.com>"]
+edition = "2018"
+
+[dependencies]
+json = "0.11.15"
+webdriver = { path = "/home/sipige/Documents/rustprojects/webdriver" }
+
