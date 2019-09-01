@@ -9,6 +9,7 @@ use std::time::Duration;
 use webdriver::enums::*;
 use webdriver::session::*;
 use webdriver::tab::*;
+use std::str::FromStr;
 
 fn configurate() {
     let mut username = String::new();
@@ -252,8 +253,6 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
             xpath += &x.to_string();
             xpath.push_str("]/a");
 
-            // /html/body/div[3]/div[2]/div/article/header/div[2]/div[1]/div[1]/h2/a
-
             if let Ok(result) = tab.find(Selector::XPath, &xpath) {
                 if let Some(mut image) = result {
                     if let Ok(()) = image.click() {
@@ -271,14 +270,39 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
                 continue;
             }
             
+            // The user name:
+            // /html/body/div[3]/div[2]/div/article/header/div[2]/div[1]/div[1]/h2/a
+
+            let mut total_likes: u32 = 0;
+            if let Ok(result) = tab.find(Selector::XPath, "/html/body/div[3]/div[2]/div/article/div[2]/section[2]/div/div/button") {
+                if let Some(likes_counter) = result {
+                    if let Ok(value) = likes_counter.get_text() {
+                        let value: Vec<&str> = value.split(' ').collect();
+                        if let Ok(number) = FromStr::from_str(value[0]) {
+                            total_likes = number;
+                        }
+                    } else {
+                        eprintln!("Can't read the likes counter.",);
+                    }
+                } else {
+                    eprintln!("Can't find the likes counter.");
+                }
+            } else {
+                eprintln!("Can't search the likes counter.");
+                continue;
+            }
 
             if let Ok(result) = tab.find(Selector::XPath, "/html/body/div[3]/div[2]/div/article/div[2]/section[1]/span[1]/button/span") {
                 if let Some(mut heart) = result {
-                    if let Ok(()) = heart.click() {
-                        thread::sleep(Duration::from_millis(1000));
-                        likes += 1;
+                    if total_likes < 50 {
+                        if let Ok(()) = heart.click() {
+                            thread::sleep(Duration::from_millis(1000));
+                            likes += 1;
+                        } else {
+                            eprintln!("Can't click the heart.",);
+                        }
                     } else {
-                        eprintln!("Can't click the heart.",);
+                        println!("Too much likes ({}/50) ! Ignoring this post...", total_likes);
                     }
                 } else {
                     eprintln!("Can't find the heart.");
