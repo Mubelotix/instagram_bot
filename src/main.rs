@@ -177,22 +177,41 @@ fn main() {
                     password = password.trim().to_string();
                 }
 
+                // Read the number likes to do
+                println!("How many likes to do?");
+                let mut likes = String::new();
+                io::stdin()
+                    .read_line(&mut likes)
+                    .expect("Failed to read line");
+                let likes: u32 = likes.trim().to_string().parse().unwrap();
+
                 // Launch
-                launch_bot(&username, &password, hashtags, browser);
+                launch_bot(&username, &password, hashtags, browser, likes);
             }
-            3..=4 => println!("En cours de développement."),
+            3..=4 => println!("Please wait beta version to use that."),
             _ => println!("Inconnu."),
         }
     }
 }
 
-fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Browser) {
+fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Browser, likes_limit: u32) {
     let mut likes = 0;
-    let mut limit = 9999;
     let mut post_processed = 0;
+    let mut errors = 0;
 
-    let session = Session::new(browser).expect("Echec de création de la session");
-    let mut tab = session.get_selected_tab().unwrap();
+    let session = if let Ok(result) = Session::new(browser) {
+        result
+    } else {
+        eprintln!("Can't launch webdriver session. Please verify that selenium is running. Maybe you need to replace the driver of your browser to match the version of it.");
+        return;
+    };
+    let mut tab = if let Ok(result) = session.get_selected_tab() {
+        result
+    } else {
+        eprintln!("Can't select tab.");
+        return;
+    };
+
     tab.navigate("https://www.instagram.com/accounts/login/?source=auth_switcher")
         .unwrap();
     thread::sleep(Duration::from_millis(5000));
@@ -238,17 +257,20 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
         tab.navigate(&url).unwrap();
         thread::sleep(Duration::from_millis(2000));
 
-        while post_processed < limit {
+        while likes < likes_limit && errors <= 10 {
             let x = (post_processed % 3) + 1;
-            let y = ((post_processed - (x - 1)) / 3) + 1;
+            let mut y = ((post_processed - (x - 1)) / 3) + 1;
             post_processed += 1;
 
             let mut xpath = String::from("/html/body/span/section/main/article/div[2]/div/div[");
-            if y > 12 {
-                xpath += "13";
-            } else {
-                xpath += &y.to_string();
+            if y > 11 {
+                if x == 1 {
+                    y = 12;
+                } else {
+                    y = 11;
+                }
             }
+            xpath += &y.to_string();
             xpath.push_str("]/div[");
             xpath += &x.to_string();
             xpath.push_str("]/a");
@@ -259,14 +281,17 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
                         thread::sleep(Duration::from_millis(4000));
                     } else {
                         eprintln!("Can't click image.");
+                        errors += 1;
                         continue;
                     }
                 } else {
-                    eprintln!("Can't find image.");
+                    eprintln!("Can't find image (xpath: {}).", xpath);
+                    errors += 1;
                     continue;
                 }
             } else {
                 eprintln!("Can't search image.");
+                errors += 1;
                 continue;
             }
             
@@ -289,6 +314,7 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
                 }
             } else {
                 eprintln!("Can't search the likes counter.");
+                errors += 1;
                 continue;
             }
 
@@ -309,6 +335,7 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
                 }
             } else {
                 eprintln!("Can't search the heart.");
+                errors += 1;
                 continue;
             }
             
@@ -325,8 +352,17 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
                 }
             } else {
                 eprintln!("Can't search close button.");
+                errors += 1;
                 continue;
             }
+
+            if errors > 0 {
+                errors -= 1;
+            }
+        }
+
+        if errors > 10 {
+            println!("Too much errors. Stopping process.");
         }
     }
 }
