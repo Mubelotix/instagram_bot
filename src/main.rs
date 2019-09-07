@@ -123,14 +123,6 @@ fn read_config() -> Result<(String, String, Vec<String>, Browser), ()> {
 }
 
 fn main() {
-    let test = json::object!{
-        "likes" => array![
-            object!{
-                "pseudo" => "jean-mi",
-                "date" => "hdeod",
-            }
-        ]
-    };
     let mut config = read_config();
     while config.is_err() {
         println!("Une configuration doit être effectuée.");
