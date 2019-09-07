@@ -2,3 +2,4 @@
 **/*.rs.bk
 /config.txt
 Cargo.lock
+targets.json

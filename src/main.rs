@@ -1,6 +1,7 @@
 use json::{
     object,
-    array
+    array,
+    JsonValue
 };
 use std::fs::File;
 use std::io;
@@ -14,6 +15,37 @@ use webdriver::session::*;
 use webdriver::tab::*;
 use std::str::FromStr;
 use colored::*;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+const MAX_LIKES: usize = 40;
+const SECONDS_BEFORE_RELIKING: usize = 86400*2;
+
+struct User {
+    username: String,
+    last_like_timestamp: u64,
+}
+
+impl User {
+    pub fn new(username: String) -> Self {
+        let start = SystemTime::now();
+        User {
+            username,
+            last_like_timestamp: start.duration_since(UNIX_EPOCH).expect("Error: failed to read time").as_secs()
+        }
+    }
+}
+
+impl PartialEq for User {
+    fn eq(&self, other: &Self) -> bool {
+        self.username == other.username
+    }
+}
+
+impl PartialEq<String> for User {
+    fn eq(&self, other: &String) -> bool {
+        &self.username == other
+    }
+}
 
 fn configurate() {
     let mut username = String::new();
@@ -193,6 +225,77 @@ fn main() {
     }
 }
 
+impl From<User> for JsonValue {
+    fn from(val: User) -> JsonValue {
+        object!{
+            "username" => val.username,
+            "timestamp" => val.last_like_timestamp
+        }
+    }
+}
+
+fn save_usernames(usernames: Vec<(User)>) {
+    if let Ok(mut file) = File::create("targets.json") {
+        if let Err(e) = file.write_all(json::stringify(json::object!(
+            "likes" => usernames,
+        )).as_bytes()) {
+            eprintln!("Failed to write data in data.json ({}).", e);
+        }
+    } else {
+        eprintln!("Failed to open or create data.json.");
+    }
+}
+
+fn read_usernames() -> Vec<User> {
+    if let Ok(file) = std::fs::read_to_string("targets.json") {
+        if let Ok(json) = json::parse(&file) {
+            let mut users: Vec<User> = Vec::new();
+            let mut i = 0;
+            while !json["likes"][i].is_null() {
+                if json["likes"][i]["username"].is_string() {
+                    if let Some(timestamp) = json["likes"][i]["timestamp"].as_u64() {
+                        users.push(
+                            User {
+                                username: json["likes"][i]["username"].to_string(),
+                                last_like_timestamp: timestamp,
+                            }
+                        )
+                    } else {
+                        eprintln!("Error 4 when trying to read targets.json.");
+                    }
+                } else {
+                    eprintln!("Error 3 when trying to read targets.json.");
+                }
+                i+=1;
+            }
+
+            users
+        } else {
+            eprintln!("Error 2 when trying to read targets.json.");
+            Vec::new()
+        }
+        
+    } else {
+        eprintln!("Error 1 when trying to read targets.json.");
+        Vec::new()
+    }
+}
+
+fn user_must_be_ignored(u1: &User, us: &Vec<User>) -> bool {
+    for u2 in us {
+        if u1.username == u2.username {
+            if u1.last_like_timestamp - SECONDS_BEFORE_RELIKING as u64 >= u2.last_like_timestamp {
+                return false;
+            } else {
+                return true;
+            }
+        } else {
+            return false;
+        }
+    }
+    false
+}
+
 #[allow(clippy::cognitive_complexity)]
 fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Browser, likes_limit: u32) {
     let mut likes = 0;
@@ -250,7 +353,7 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
         .unwrap();
     notif.click().unwrap();
 
-    let mut usernames: Vec<String> = Vec::new();
+    let mut users: Vec<User> = read_usernames();
     for hashtag in hashtags {
         let mut url = String::from("https://www.instagram.com/explore/tags/");
         url += &hashtag;
@@ -296,16 +399,20 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
                 continue;
             }
 
-            let mut username = String::new();
+            let user: User;
             if let Ok(result) = tab.find(Selector::XPath, "/html/body/div[3]/div[2]/div/article/header/div[2]/div[1]/div[1]/h2/a") {
                 if let Some(username_element) = result {
                     if let Ok(value) = username_element.get_text() {
-                        username = value;
+                        user = User::new(value);
                     } else {
-                        eprintln!("Can't read username.",);
+                        eprintln!("Can't read username.");
+                        errors += 1;
+                        continue;
                     }
                 } else {
                     eprintln!("Can't find username.");
+                    errors += 1;
+                    continue;
                 }
             } else {
                 eprintln!("Can't search username.");
@@ -313,7 +420,7 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
                 continue;
             }
 
-            let mut total_likes: u32 = 0;
+            let mut total_likes: usize = 0;
             if let Ok(result) = tab.find(Selector::XPath, "/html/body/div[3]/div[2]/div/article/div[2]/section[2]/div/div/button") {
                 if let Some(likes_counter) = result {
                     if let Ok(value) = likes_counter.get_text() {
@@ -335,18 +442,18 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
 
             if let Ok(result) = tab.find(Selector::XPath, "/html/body/div[3]/div[2]/div/article/div[2]/section[1]/span[1]/button/span") {
                 if let Some(mut heart) = result {
-                    if usernames.contains(&username) {
-                        println!("{} has already received a like.", username);
-                    } else if total_likes <= 50 {
+                    if user_must_be_ignored(&user, &users) {
+                        println!("{} has already received a like.", user.username);
+                    } else if total_likes <= MAX_LIKES {
                         if let Ok(()) = heart.click() {
                             thread::sleep(Duration::from_millis(1000));
-                            usernames.push(username);
+                            users.push(user);
                             likes += 1;
                         } else {
                             eprintln!("Can't click the heart.",);
                         }
                     } else {
-                        println!("Too much likes ({}/50) ! Ignoring this post...", total_likes);
+                        println!("Too much likes ({}/{}) ! Ignoring this post...", total_likes, MAX_LIKES);
                     }
                 } else {
                     eprintln!("Can't find the heart.");
@@ -383,4 +490,6 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
             println!("Too much errors. Stopping process.");
         }
     }
+
+    save_usernames(users);
 }
