@@ -1,4 +1,7 @@
-use json::object;
+use json::{
+    object,
+    array
+};
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -10,6 +13,7 @@ use webdriver::enums::*;
 use webdriver::session::*;
 use webdriver::tab::*;
 use std::str::FromStr;
+use colored::*;
 
 fn configurate() {
     let mut username = String::new();
@@ -95,12 +99,7 @@ fn read_config() -> Result<(String, String, Vec<String>, Browser), ()> {
                     i += 1;
                 }
                 if let Some(browser) = contents["browser"].as_str() {
-                    let browser2;
-                    if browser == "chrome" {
-                        browser2 = Browser::Chrome;
-                    } else {
-                        browser2 = Browser::Firefox;
-                    }
+                    let browser2 = if browser == "chrome" { Browser::Chrome } else { Browser::Firefox };
                     return Ok((
                         username.to_string(),
                         password.to_string(),
@@ -124,6 +123,14 @@ fn read_config() -> Result<(String, String, Vec<String>, Browser), ()> {
 }
 
 fn main() {
+    let test = json::object!{
+        "likes" => array![
+            object!{
+                "pseudo" => "jean-mi",
+                "date" => "hdeod",
+            }
+        ]
+    };
     let mut config = read_config();
     while config.is_err() {
         println!("Une configuration doit être effectuée.");
@@ -194,6 +201,7 @@ fn main() {
     }
 }
 
+#[allow(clippy::cognitive_complexity)]
 fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Browser, likes_limit: u32) {
     let mut likes = 0;
     let mut post_processed = 0;
@@ -250,6 +258,7 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
         .unwrap();
     notif.click().unwrap();
 
+    let mut usernames: Vec<String> = Vec::new();
     for hashtag in hashtags {
         let mut url = String::from("https://www.instagram.com/explore/tags/");
         url += &hashtag;
@@ -294,9 +303,23 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
                 errors += 1;
                 continue;
             }
-            
-            // The user name:
-            // /html/body/div[3]/div[2]/div/article/header/div[2]/div[1]/div[1]/h2/a
+
+            let mut username = String::new();
+            if let Ok(result) = tab.find(Selector::XPath, "/html/body/div[3]/div[2]/div/article/header/div[2]/div[1]/div[1]/h2/a") {
+                if let Some(username_element) = result {
+                    if let Ok(value) = username_element.get_text() {
+                        username = value;
+                    } else {
+                        eprintln!("Can't read username.",);
+                    }
+                } else {
+                    eprintln!("Can't find username.");
+                }
+            } else {
+                eprintln!("Can't search username.");
+                errors += 1;
+                continue;
+            }
 
             let mut total_likes: u32 = 0;
             if let Ok(result) = tab.find(Selector::XPath, "/html/body/div[3]/div[2]/div/article/div[2]/section[2]/div/div/button") {
@@ -320,9 +343,12 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
 
             if let Ok(result) = tab.find(Selector::XPath, "/html/body/div[3]/div[2]/div/article/div[2]/section[1]/span[1]/button/span") {
                 if let Some(mut heart) = result {
-                    if total_likes < 50 {
+                    if usernames.contains(&username) {
+                        println!("{} has already received a like.", username);
+                    } else if total_likes <= 50 {
                         if let Ok(()) = heart.click() {
                             thread::sleep(Duration::from_millis(1000));
+                            usernames.push(username);
                             likes += 1;
                         } else {
                             eprintln!("Can't click the heart.",);
