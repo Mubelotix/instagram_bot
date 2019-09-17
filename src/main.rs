@@ -74,7 +74,7 @@ fn configurate() {
         .read_line(&mut browser)
         .expect("Failed to read line");
 
-    if browser == "great!" {
+    if browser == "great!\n" {
         browser = String::from("firefox");
     } else {
         browser = String::from("chrome");
