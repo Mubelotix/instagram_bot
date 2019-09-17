@@ -6,5 +6,5 @@ edition = "2018"
 
 [dependencies]
 json = "0.11.15"
-webdriver = { git = "https://github.com/Mubelotix/webdriver" }
+webdriver = { git = "https://github.com/Mubelotix/webdriver", rev = "23f7d2f" }
 env_logger = "0.6.2"
