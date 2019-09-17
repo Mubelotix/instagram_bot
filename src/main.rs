@@ -154,7 +154,10 @@ fn read_config() -> Result<(String, String, Vec<String>, Browser), ()> {
 }
 
 fn main() {
-    env_logger::init();
+    if cfg!(debug_assertions) {
+        env_logger::init();
+    }
+    
     let mut config = read_config();
     while config.is_err() {
         println!("You need to do a configuration.");
