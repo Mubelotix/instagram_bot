@@ -74,7 +74,7 @@ fn configurate() {
         .read_line(&mut browser)
         .expect("Failed to read line");
 
-    if browser == "oui\n" {
+    if browser == "great!" {
         browser = String::from("firefox");
     } else {
         browser = String::from("chrome");
@@ -400,6 +400,8 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
             eprintln!("Can't search post");
             return;
         }
+
+        thread::sleep(Duration::from_secs(10));
 
         let mut post_liked = 0;
         while post_liked < likes_limit {
