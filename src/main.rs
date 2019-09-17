@@ -14,7 +14,6 @@ use webdriver::enums::*;
 use webdriver::session::*;
 use webdriver::tab::*;
 use std::str::FromStr;
-use colored::*;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_LIKES: usize = 40;
@@ -214,7 +213,7 @@ fn main() {
                 io::stdin()
                     .read_line(&mut likes)
                     .expect("Failed to read line");
-                let likes: u32 = likes.trim().to_string().parse().unwrap();
+                let likes: usize = likes.trim().to_string().parse().unwrap();
 
                 // Launch
                 launch_bot(&username, &password, hashtags, browser, likes);
@@ -281,6 +280,8 @@ fn read_usernames() -> Vec<User> {
     }
 }
 
+#[allow(clippy::needless_bool)]
+#[allow(clippy::never_loop)]
 fn user_must_be_ignored(u1: &User, us: &Vec<User>) -> bool {
     for u2 in us {
         if u1.username == u2.username {
@@ -297,199 +298,178 @@ fn user_must_be_ignored(u1: &User, us: &Vec<User>) -> bool {
 }
 
 #[allow(clippy::cognitive_complexity)]
-fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Browser, likes_limit: u32) {
-    let mut likes = 0;
-    let mut post_processed = 0;
-    let mut errors = 0;
+fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Browser, likes_limit: usize) {
+    let likes_limit = likes_limit / hashtags.len();
+    let mut session = Session::new(browser).expect("Failed to create session.");
 
-    let session = if let Ok(result) = Session::new(browser) {
-        result
+    let mut tab = session.get_selected_tab().expect("Failed to get tab");
+    tab.navigate("https://www.instagram.com/accounts/login/?source=auth_switcher").expect("Failed to load page");
+    thread::sleep(Duration::from_secs(5));
+    if let Ok(input) = tab.find(Selector::XPath, "/html/body/span/section/main/div/article/div/div[1]/div/form/div[2]/div/label/input") {
+        if let Some(mut input) = input {
+            if input.type_text(username).is_err() {
+                eprintln!("Error while sending text to input");
+                return;
+            }
+        } else {
+            eprintln!("Can't find input");
+            return;
+        }
     } else {
-        eprintln!("Can't launch webdriver session. Please verify that selenium is running. Maybe you need to replace the driver of your browser to match the version of it.");
+        eprintln!("Can't search input");
         return;
-    };
-    let mut tab = if let Ok(result) = session.get_selected_tab() {
-        result
+    }
+    if let Ok(input) = tab.find(Selector::XPath, "/html/body/span/section/main/div/article/div/div[1]/div/form/div[3]/div/label/input") {
+        if let Some(mut input) = input {
+            if input.type_text(password).is_err() {
+                eprintln!("Error while sending text to password input");
+                return;
+            }
+        } else {
+            eprintln!("Can't find password input");
+            return;
+        }
     } else {
-        eprintln!("Can't select tab.");
+        eprintln!("Can't search password input");
         return;
-    };
-
-    tab.navigate("https://www.instagram.com/accounts/login/?source=auth_switcher")
-        .unwrap();
-    thread::sleep(Duration::from_millis(5000));
-    let mut username_block = tab
-        .find(Selector::Css, "input[name=\"username\"]")
-        .unwrap()
-        .unwrap();
-    let mut password_block = tab
-        .find(Selector::Css, "input[name=\"password\"]")
-        .unwrap()
-        .unwrap();
-    let mut submit_block = tab
-        .find(Selector::Css, "button[type=\"submit\"]")
-        .unwrap()
-        .unwrap();
-    username_block.type_text(username).unwrap();
-    password_block.type_text(password).unwrap();
-    submit_block.click().unwrap();
-
-    while let None = tab
-        .find(
-            Selector::XPath,
-            "/html/body/div[3]/div/div/div[3]/button[2]",
-        )
-        .unwrap()
-    {
-        thread::sleep(Duration::from_millis(100));
+    }
+    if let Ok(input) = tab.find(Selector::XPath, "/html/body/span/section/main/div/article/div/div[1]/div/form/div[4]/button") {
+        if let Some(mut input) = input {
+            if input.click().is_err() {
+                eprintln!("Error while clicking submit button");
+                return;
+            }
+        } else {
+            eprintln!("Can't find submit button");
+            return;
+        }
+    } else {
+        eprintln!("Can't search submit button");
+        return;
+    }
+    thread::sleep(Duration::from_secs(5));
+    if let Ok(url) = tab.get_url() {
+        if url == "https://www.instagram.com/accounts/login/?source=auth_switcher" {
+            if let Ok(message) = tab.find(Selector::XPath, "//*[@id=\"slfErrorAlert\"]") {
+                if let Some(message) = message {
+                    if let Ok(message) = message.get_text() {
+                        eprintln!("{}", message);
+                        return;
+                    } else {
+                        eprintln!("Can't read error message");
+                        return;
+                    }
+                } else {
+                    eprintln!("Can't find error message");
+                    return;
+                }
+            } else {
+                eprintln!("Can't search error messages");
+                return;
+            }
+        }
+    } else {
+        eprintln!("Can't get url");
+        return;
+    }
+    println!("The bot is connected!");
+    
+    let mut try_number = 0;
+    while try_number < 10 {
+        thread::sleep(Duration::from_secs(1));
+        if let Ok(button) = tab.find(Selector::XPath, "/html/body/div[3]/div/div/div[3]/button[2]") {
+            if let Some(mut button) = button {
+                if button.click().is_err() {
+                    eprintln!("Error while clicking button");
+                    return;
+                } else {
+                    break;
+                }
+            }
+        } else {
+            eprintln!("Can't search button");
+            return;
+        }
+        try_number += 1;
     }
 
-    let mut notif = tab
-        .find(
-            Selector::XPath,
-            "/html/body/div[3]/div/div/div[3]/button[2]",
-        )
-        .unwrap()
-        .unwrap();
-    notif.click().unwrap();
-
-    let mut users: Vec<User> = read_usernames();
     for hashtag in hashtags {
-        let mut url = String::from("https://www.instagram.com/explore/tags/");
-        url += &hashtag;
-        url.push_str("/");
-        tab.navigate(&url).unwrap();
-        thread::sleep(Duration::from_millis(2000));
-
-        while likes < likes_limit && errors <= 10 {
-            let x = (post_processed % 3) + 1;
-            let mut y = ((post_processed - (x - 1)) / 3) + 1;
-            post_processed += 1;
-
-            let mut xpath = String::from("/html/body/span/section/main/article/div[2]/div/div[");
-            if y > 11 {
-                if x == 1 {
-                    y = 12;
-                } else {
-                    y = 11;
-                }
-            }
-            xpath += &y.to_string();
-            xpath.push_str("]/div[");
-            xpath += &x.to_string();
-            xpath.push_str("]/a");
-
-            if let Ok(result) = tab.find(Selector::XPath, &xpath) {
-                if let Some(mut image) = result {
-                    if let Ok(()) = image.click() {
-                        thread::sleep(Duration::from_millis(4000));
-                    } else {
-                        eprintln!("Can't click image.");
-                        errors += 1;
-                        continue;
-                    }
-                } else {
-                    eprintln!("Can't find image (xpath: {}).", xpath);
-                    errors += 1;
-                    continue;
-                }
-            } else {
-                eprintln!("Can't search image.");
-                errors += 1;
-                continue;
-            }
-
-            let user: User;
-            if let Ok(result) = tab.find(Selector::XPath, "/html/body/div[3]/div[2]/div/article/header/div[2]/div[1]/div[1]/h2/a") {
-                if let Some(username_element) = result {
-                    if let Ok(value) = username_element.get_text() {
-                        user = User::new(value);
-                    } else {
-                        eprintln!("Can't read username.");
-                        errors += 1;
-                        continue;
-                    }
-                } else {
-                    eprintln!("Can't find username.");
-                    errors += 1;
-                    continue;
-                }
-            } else {
-                eprintln!("Can't search username.");
-                errors += 1;
-                continue;
-            }
-
-            let mut total_likes: usize = 0;
-            if let Ok(result) = tab.find(Selector::XPath, "/html/body/div[3]/div[2]/div/article/div[2]/section[2]/div/div/button") {
-                if let Some(likes_counter) = result {
-                    if let Ok(value) = likes_counter.get_text() {
-                        let value: Vec<&str> = value.split(' ').collect();
-                        if let Ok(number) = FromStr::from_str(value[0]) {
-                            total_likes = number;
-                        }
-                    } else {
-                        eprintln!("Can't read the likes counter.",);
-                    }
-                } else {
-                    eprintln!("Can't find the likes counter.");
-                }
-            } else {
-                eprintln!("Can't search the likes counter.");
-                errors += 1;
-                continue;
-            }
-
-            if let Ok(result) = tab.find(Selector::XPath, "/html/body/div[3]/div[2]/div/article/div[2]/section[1]/span[1]/button/span") {
-                if let Some(mut heart) = result {
-                    if user_must_be_ignored(&user, &users) {
-                        println!("{} has already received a like.", user.username);
-                    } else if total_likes <= MAX_LIKES {
-                        if let Ok(()) = heart.click() {
-                            thread::sleep(Duration::from_millis(1000));
-                            users.push(user);
-                            likes += 1;
-                        } else {
-                            eprintln!("Can't click the heart.",);
-                        }
-                    } else {
-                        println!("Too much likes ({}/{}) ! Ignoring this post...", total_likes, MAX_LIKES);
-                    }
-                } else {
-                    eprintln!("Can't find the heart.");
-                }
-            } else {
-                eprintln!("Can't search the heart.");
-                errors += 1;
-                continue;
-            }
-            
-
-            if let Ok(result) = tab.find(Selector::XPath, "/html/body/div[3]/button[1]") {
-                if let Some(mut close) = result {
-                    if let Ok(()) = close.click() {
-                        thread::sleep(Duration::from_millis(1500));
-                    } else {
-                        eprintln!("Can't click close button.",);
-                    }
-                } else {
-                    eprintln!("Can't find close button.");
-                }
-            } else {
-                eprintln!("Can't search close button.");
-                errors += 1;
-                continue;
-            }
-
-            if errors > 0 {
-                errors -= 1;
-            }
+        if tab.navigate(&format!("https://www.instagram.com/explore/tags/{}/?hl=en", hashtag)).is_err() {
+            eprintln!("Can't navigate to {} hashtag", hashtag);
+            return;
         }
 
-        if errors > 10 {
-            println!("Too much errors. Stopping process.");
+        thread::sleep(Duration::from_secs(5));
+
+        if let Ok(post) = tab.find(Selector::XPath, "//*[@id=\"react-root\"]/section/main/article/div[1]/div/div/div[3]/div[3]/a") {
+            if let Some(mut post) = post {
+                if post.click().is_err() {
+                    eprintln!("Error while clicking post");
+                    return;
+                }
+            } else {
+                eprintln!("Can't find post");
+                return;
+            }
+        } else {
+            eprintln!("Can't search post");
+            return;
+        }
+
+        let mut post_liked = 0;
+        while post_liked < likes_limit {
+            if let Ok(next_button) = tab.find(Selector::XPath, "/html/body/div[3]/div[1]/div/div/a[2]") {
+                if let Some(mut next_button) = next_button {
+                    if next_button.click().is_err() {
+                        eprintln!("Error while clicking \"next\" button");
+                        continue;
+                    }
+                } else {
+                    eprintln!("Can't find \"next\" button");
+                    continue;
+                }
+            } else {
+                eprintln!("Can't search \"next\" button");
+                continue;
+            }
+
+            thread::sleep(Duration::from_secs(5));
+
+            if let Ok(heart) = tab.find(Selector::XPath, "/html/body/div[3]/div[2]/div/article/div[2]/section[1]/span[1]/button") {
+                if let Some(mut heart) = heart {
+                    if heart.click().is_err() {
+                        eprintln!("Error while clicking heart");
+                        continue;
+                    } else {
+                        post_liked += 1;
+                    }
+                } else {
+                    eprintln!("Can't find heart");
+                    continue;
+                }
+            } else {
+                eprintln!("Can't search heart");
+                continue;
+            }
+
+            thread::sleep(Duration::from_millis(500));
+
+            if let Ok(action_blocked) = tab.find(Selector::XPath, "/html/body/div[4]/div/div/div[2]/button[1]") {
+                if let Some(mut action_blocked) = action_blocked {
+                    println!("Instagram has detected the bot.");
+                    if action_blocked.click().is_ok() {
+                        println!("Accusation has been denied.");
+                    }
+                    println!("Stopping liking process.");
+                } else {
+                    // Ok
+                }
+            } else {
+                eprintln!("Can't search element");
+                continue;
+            }
+
+            thread::sleep(Duration::from_millis(600));
         }
     }
-
-    save_usernames(users);
 }
