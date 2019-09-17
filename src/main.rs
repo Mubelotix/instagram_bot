@@ -154,6 +154,7 @@ fn read_config() -> Result<(String, String, Vec<String>, Browser), ()> {
 }
 
 fn main() {
+    env_logger::init();
     let mut config = read_config();
     while config.is_err() {
         println!("Une configuration doit être effectuée.");
@@ -373,25 +374,6 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
         return;
     }
     println!("The bot is connected!");
-    
-    let mut try_number = 0;
-    while try_number < 10 {
-        thread::sleep(Duration::from_secs(1));
-        if let Ok(button) = tab.find(Selector::XPath, "/html/body/div[3]/div/div/div[3]/button[2]") {
-            if let Some(mut button) = button {
-                if button.click().is_err() {
-                    eprintln!("Error while clicking button");
-                    return;
-                } else {
-                    break;
-                }
-            }
-        } else {
-            eprintln!("Can't search button");
-            return;
-        }
-        try_number += 1;
-    }
 
     for hashtag in hashtags {
         if tab.navigate(&format!("https://www.instagram.com/explore/tags/{}/?hl=en", hashtag)).is_err() {
@@ -399,9 +381,9 @@ fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Br
             return;
         }
 
-        thread::sleep(Duration::from_secs(5));
+        thread::sleep(Duration::from_secs(10));
 
-        if let Ok(post) = tab.find(Selector::XPath, "//*[@id=\"react-root\"]/section/main/article/div[1]/div/div/div[3]/div[3]/a") {
+        if let Ok(post) = tab.find(Selector::XPath, "/html/body/span/section/main/article/div[1]/div/div/div[3]/div[3]/a") {
             if let Some(mut post) = post {
                 if post.click().is_err() {
                     eprintln!("Error while clicking post");
