@@ -52,24 +52,24 @@ fn configurate() {
     let mut hashtags = String::new();
     let mut browser = String::new();
 
-    println!("Bienvenue dans l'outil d'automatisation de likes.");
+    println!("Welcome to this instagram bot.");
     println!(
-        "Le bot se connectera à votre compte et likera des publications dans des hashtags ciblés."
+        "The bot will connect on your account and will likes publications in targeted hashtags."
     );
-    println!("Vous allez faire une configuration. Elle sera enregistrée mais modifiable.");
-    println!("Quel est votre nom d'utilisateur ?");
+    println!("You need to configurate the bot. Configuration will be saved and you will be able to update informations.");
+    println!("What is your instagram username ?");
     io::stdin()
         .read_line(&mut username)
         .expect("Failed to read line");
-    println!("Quel est votre mot de passe ? Il sera stocké localement mais pas crypté. Pour plus de sécurité vous pouvez opter pour l'option de le renseigner à chaque lancement du bot en écrivant \"secret\" (sans les guillemets).");
+    println!("What is your password ? He will be stored in config.txt and readable by everyone. You can type \"secret\" if you don't want to store your password.");
     io::stdin()
         .read_line(&mut password)
         .expect("Failed to read line");
-    println!("Donnez la liste des hashtags que vous voulez cibler, séparés par des espaces et non précédés par le '#'.");
+    println!("Write the list of hashtags you want to target, separed by spaces and without the caracter '#'.");
     io::stdin()
         .read_line(&mut hashtags)
         .expect("Failed to read line");
-    println!("Répondre \"oui\" pour utiliser Firefox.");
+    println!("Say \"great!\" if you use Firefox. (otherwise the bot will use chrome)");
     io::stdin()
         .read_line(&mut browser)
         .expect("Failed to read line");
@@ -86,7 +86,7 @@ fn configurate() {
     let hashtags: Vec<&str> = hashtags.split(" ").collect();
 
     let mut config_file =
-        File::create("config.txt").expect("Impossible de créer le fichier config.txt.");
+        File::create("config.txt").expect("Unable to write in file config.txt.");
     config_file
         .write_all(
             json::stringify(json::object!(
@@ -97,10 +97,10 @@ fn configurate() {
             ))
             .as_bytes(),
         )
-        .expect("Impossible d'écrire dans le fichier config.txt.");
+        .expect("Unable to write in file config.txt.");
     config_file.sync_all();
 
-    println!("Configuration terminée et enregistrée.");
+    println!("Configuration done!");
 }
 
 fn read_config() -> Result<(String, String, Vec<String>, Browser), ()> {
@@ -157,19 +157,19 @@ fn main() {
     env_logger::init();
     let mut config = read_config();
     while config.is_err() {
-        println!("Une configuration doit être effectuée.");
+        println!("You need to do a configuration.");
         configurate();
         config = read_config();
     }
     let (username, mut password, hashtags, browser) = config.unwrap();
     loop {
-        println!("Choisissez une action :");
-        println!("[1] : Reconfigurer");
-        println!("[2] : Lancer le bot sur un hashtag donné");
+        println!("Choose an action number :");
+        println!("[1] : Do configuration again");
+        println!("[2] : Launch but on a hashtag you will choose");
         println!(
-            "[3] : Lancer le bot sur tous les hashtags rensignés dans le fichier de configuration"
+            "[3] : Launch bot on every hashtags stored in config.txt file."
         );
-        println!("[4] : Voir les stats");
+        println!("[4] : See stats");
 
         let mut input_text = String::new();
         io::stdin()
@@ -185,7 +185,7 @@ fn main() {
         match answer {
             1 => {
                 configurate();
-                println!("Redémmarage nécessaire.");
+                println!("YOU MUST LAUNCH THIS PROGRAM AGAIN.");
             }
             2 => {
                 // Read the hashtag
