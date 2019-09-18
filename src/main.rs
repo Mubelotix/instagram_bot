@@ -1,7 +1,5 @@
 use json::{
-    object,
-    array,
-    JsonValue
+    object
 };
 use std::fs::File;
 use std::io;
@@ -12,39 +10,6 @@ use std::thread;
 use std::time::Duration;
 use webdriver::enums::*;
 use webdriver::session::*;
-use webdriver::tab::*;
-use std::str::FromStr;
-use std::time::{SystemTime, UNIX_EPOCH};
-
-const MAX_LIKES: usize = 40;
-const SECONDS_BEFORE_RELIKING: usize = 86400*2;
-
-struct User {
-    username: String,
-    last_like_timestamp: u64,
-}
-
-impl User {
-    pub fn new(username: String) -> Self {
-        let start = SystemTime::now();
-        User {
-            username,
-            last_like_timestamp: start.duration_since(UNIX_EPOCH).expect("Error: failed to read time").as_secs()
-        }
-    }
-}
-
-impl PartialEq for User {
-    fn eq(&self, other: &Self) -> bool {
-        self.username == other.username
-    }
-}
-
-impl PartialEq<String> for User {
-    fn eq(&self, other: &String) -> bool {
-        &self.username == other
-    }
-}
 
 fn configurate() {
     let mut username = String::new();
@@ -73,8 +38,8 @@ fn configurate() {
     io::stdin()
         .read_line(&mut browser)
         .expect("Failed to read line");
-
-    if browser == "great!\n" {
+    
+    if browser.trim() == "great!" {
         browser = String::from("firefox");
     } else {
         browser = String::from("chrome");
@@ -83,7 +48,7 @@ fn configurate() {
     username = username.trim().to_string();
     password = password.trim().to_string();
     hashtags = hashtags.trim().to_string();
-    let hashtags: Vec<&str> = hashtags.split(" ").collect();
+    let hashtags: Vec<&str> = hashtags.split(' ').collect();
 
     let mut config_file =
         File::create("config.txt").expect("Unable to write in file config.txt.");
@@ -98,6 +63,7 @@ fn configurate() {
             .as_bytes(),
         )
         .expect("Unable to write in file config.txt.");
+
     config_file.sync_all();
 
     println!("Configuration done!");
@@ -105,16 +71,19 @@ fn configurate() {
 
 fn read_config() -> Result<(String, String, Vec<String>, Browser), ()> {
     let file = File::open("config.txt");
-    if let Err(_) = file {
+    if file.is_err() {
         println!("Can't open config.txt.");
         return Err(());
     }
     let file = file.unwrap();
     let mut buf_reader = BufReader::new(file);
     let mut contents = String::new();
-    buf_reader.read_to_string(&mut contents);
+    if buf_reader.read_to_string(&mut contents).is_err() {
+        println!("Can't read config.txt.");
+        return Err(());
+    }
     let contents = json::parse(&contents);
-    if let Err(_) = contents {
+    if contents.is_err() {
         println!("config.txt contains invalid data.");
         return Err(());
     }
@@ -164,7 +133,7 @@ fn main() {
         configurate();
         config = read_config();
     }
-    let (username, mut password, hashtags, browser) = config.unwrap();
+    let (username, mut password, _hashtags, browser) = config.unwrap();
     loop {
         println!("Choose an action number :");
         println!("[1] : Do configuration again");
@@ -228,83 +197,10 @@ fn main() {
     }
 }
 
-impl From<User> for JsonValue {
-    fn from(val: User) -> JsonValue {
-        object!{
-            "username" => val.username,
-            "timestamp" => val.last_like_timestamp
-        }
-    }
-}
-
-fn save_usernames(usernames: Vec<(User)>) {
-    if let Ok(mut file) = File::create("targets.json") {
-        if let Err(e) = file.write_all(json::stringify(json::object!(
-            "likes" => usernames,
-        )).as_bytes()) {
-            eprintln!("Failed to write data in data.json ({}).", e);
-        }
-    } else {
-        eprintln!("Failed to open or create data.json.");
-    }
-}
-
-fn read_usernames() -> Vec<User> {
-    if let Ok(file) = std::fs::read_to_string("targets.json") {
-        if let Ok(json) = json::parse(&file) {
-            let mut users: Vec<User> = Vec::new();
-            let mut i = 0;
-            while !json["likes"][i].is_null() {
-                if json["likes"][i]["username"].is_string() {
-                    if let Some(timestamp) = json["likes"][i]["timestamp"].as_u64() {
-                        users.push(
-                            User {
-                                username: json["likes"][i]["username"].to_string(),
-                                last_like_timestamp: timestamp,
-                            }
-                        )
-                    } else {
-                        eprintln!("Error 4 when trying to read targets.json.");
-                    }
-                } else {
-                    eprintln!("Error 3 when trying to read targets.json.");
-                }
-                i+=1;
-            }
-
-            users
-        } else {
-            eprintln!("Error 2 when trying to read targets.json.");
-            Vec::new()
-        }
-        
-    } else {
-        eprintln!("Error 1 when trying to read targets.json.");
-        Vec::new()
-    }
-}
-
-#[allow(clippy::needless_bool)]
-#[allow(clippy::never_loop)]
-fn user_must_be_ignored(u1: &User, us: &Vec<User>) -> bool {
-    for u2 in us {
-        if u1.username == u2.username {
-            if u1.last_like_timestamp - SECONDS_BEFORE_RELIKING as u64 >= u2.last_like_timestamp {
-                return false;
-            } else {
-                return true;
-            }
-        } else {
-            return false;
-        }
-    }
-    false
-}
-
 #[allow(clippy::cognitive_complexity)]
 fn launch_bot(username: &str, password: &str, hashtags: Vec<String>, browser: Browser, likes_limit: usize) {
     let likes_limit = likes_limit / hashtags.len();
-    let mut session = Session::new(browser).expect("Failed to create session.");
+    let session = Session::new(browser).expect("Failed to create session.");
 
     let mut tab = session.get_selected_tab().expect("Failed to get tab");
     tab.navigate("https://www.instagram.com/accounts/login/?source=auth_switcher").expect("Failed to load page");

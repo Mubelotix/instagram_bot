@@ -446,7 +446,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "instagrambot"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "env_logger 0.6.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "json 0.11.15 (registry+https://github.com/rust-lang/crates.io-index)",
